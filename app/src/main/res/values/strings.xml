@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">packet sniffer test</string>
+    <string name="buttonstarttext">Start</string>
+    <string name="buttonactivetext">Scanning... (tap to stop)</string>
+</resources>
