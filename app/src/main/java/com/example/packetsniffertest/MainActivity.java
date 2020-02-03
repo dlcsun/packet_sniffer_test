@@ -27,6 +27,7 @@ import org.w3c.dom.Text;
 
 import java.sql.Time;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
@@ -42,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
     ArrayList<String> btids;
     ArrayList<String> wfids;
     ArrayList<String> parsedResults;
+    ArrayList<String> whitelist;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +65,7 @@ public class MainActivity extends AppCompatActivity {
 
         btids = new ArrayList<>();
         parsedResults = new ArrayList<>();
+        whitelist = new ArrayList<>(Arrays.asList("20001","20002","20003","20004"));
 
         final Button button = findViewById(R.id.button);
         final TextView tv = findViewById(R.id.textView);
@@ -72,7 +75,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onScanResult(int callbackType, ScanResult result) {
                 super.onScanResult(callbackType, result);
-                if (!btids.contains(result.getDevice().getAddress())) {
+                if (!btids.contains(result.getDevice().getAddress()) &&
+                        whitelist.contains(result.getDevice().getUuids())) {
                     //Log.d("Scan", "Found a new bluetooth signal");
                     Calendar calendar = Calendar.getInstance();
                     String parsedResult = String.format(
