@@ -25,10 +25,15 @@ import android.widget.ViewSwitcher;
 
 import org.w3c.dom.Text;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.sql.Time;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -36,6 +41,7 @@ import java.util.Formatter;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
+import java.util.Objects;
 import java.util.Set;
 
 public class MainActivity extends AppCompatActivity {
@@ -44,6 +50,17 @@ public class MainActivity extends AppCompatActivity {
     ArrayList<String> wfids;
     ArrayList<String> parsedResults;
     ArrayList<String> whitelist;
+    String b1id;
+    String b2id;
+    LocalTime lastb1time;
+    LocalTime lastb2time;
+    LocalTime currenttime;
+    int lastb1;
+    int lastb2;
+    int datacount;
+    boolean b1available;
+    boolean b2available;
+    String currentfilename;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,6 +83,13 @@ public class MainActivity extends AppCompatActivity {
         btids = new ArrayList<>();
         parsedResults = new ArrayList<>();
         whitelist = new ArrayList<>(Arrays.asList("20001","20002","20003","20004"));
+        b1id = "20001";
+        b2id = "20002";
+        lastb1 = lastb2 = 1;
+        lastb1time = lastb2time = currenttime = LocalTime.now();
+        b1available = b2available = false;
+        datacount = 0;
+        currentfilename = "";
 
         final Button button = findViewById(R.id.button);
         final TextView tv = findViewById(R.id.textView);
@@ -74,19 +98,18 @@ public class MainActivity extends AppCompatActivity {
         final ScanCallback callback = new ScanCallback() {
             @Override
             public void onScanResult(int callbackType, ScanResult result) {
+                currenttime = LocalTime.now();
+                String uuid1 = result.getDevice().getUuids()[0].toString().substring(0,5);
                 super.onScanResult(callbackType, result);
                 if (!btids.contains(result.getDevice().getAddress()) &&
-                        whitelist.contains(result.getDevice().getUuids())) {
+                        whitelist.contains(uuid1) ){
                     //Log.d("Scan", "Found a new bluetooth signal");
-                    Calendar calendar = Calendar.getInstance();
                     String parsedResult = String.format(
-                            "Name: %-22s | Address: %s | RSSI: %-3d | %02d:%02d:%02d\n",
+                            "Name: %-22s | Address: %s | RSSI: %-3d | %02d\n",
                             result.getDevice().getName(),
                             result.getDevice().getAddress(),
                             result.getRssi(),
-                            calendar.get(Calendar.HOUR_OF_DAY),
-                            calendar.get(Calendar.MINUTE),
-                            calendar.get(Calendar.SECOND));
+                            currenttime.format(DateTimeFormatter.ISO_LOCAL_TIME));
                     parsedResults.add(parsedResult);
                     StringBuilder out = new StringBuilder();
                     for (String s:parsedResults) {
@@ -94,26 +117,105 @@ public class MainActivity extends AppCompatActivity {
                     }
                     tv.setText(out.toString());
                     btids.add(result.getDevice().getAddress());
+
+                    if (Objects.equals(uuid1, b1id)){
+                        if(currenttime.isBefore(lastb2time.plusNanos(500)) && b2available) {
+                            String data = String.format(
+                                    "%d %d %s %s",
+                                    lastb1,
+                                    lastb2,
+                                    currenttime.format(DateTimeFormatter.ISO_LOCAL_TIME),
+                                    lastb2time.format(DateTimeFormatter.ISO_LOCAL_TIME)
+                            );
+                            writeToFile(data, currentfilename, getApplicationContext());
+                            datacount++;
+                            b1available = false;
+                            b2available = false;
+                        }
+                        else{
+                            lastb1 = result.getRssi();
+                            lastb1time = currenttime;
+                            b1available = true;
+                        }
+                    }
+                    else if (Objects.equals(uuid1, b2id)){
+                        if(currenttime.isBefore(lastb1time.plusNanos(500)) && b1available) {
+                            String data = String.format(
+                                    "%d %d %s %s",
+                                    lastb1,
+                                    lastb2,
+                                    lastb1time.format(DateTimeFormatter.ISO_LOCAL_TIME),
+                                    currenttime.format(DateTimeFormatter.ISO_LOCAL_TIME)
+                            );
+                            writeToFile(data, currentfilename, getApplicationContext());
+                            datacount++;
+                            b1available = false;
+                            b2available = false;
+                        }
+                        else{
+                            lastb2 = result.getRssi();
+                            lastb2time = currenttime;
+                            b2available = true;
+                        }
+                    }
                 }
                 else {
                     //Log.d("Scan", "Found a duplicate bluetooth signal");
                     //update last seen
                     int loc = btids.indexOf(result.getDevice().getAddress());
-                    Calendar calendar = Calendar.getInstance();
                     String parsedResult = String.format(
-                            "Name: %-22s | Address: %s | RSSI: %-3d | %02d:%02d:%02d\n",
+                            "Name: %-22s | Address: %s | RSSI: %-3d | %02d\n",
                             result.getDevice().getName(),
                             result.getDevice().getAddress(),
                             result.getRssi(),
-                            calendar.get(Calendar.HOUR_OF_DAY),
-                            calendar.get(Calendar.MINUTE),
-                            calendar.get(Calendar.SECOND));
+                            currenttime.format(DateTimeFormatter.ISO_LOCAL_TIME));
                     parsedResults.set(loc, parsedResult);
                     StringBuilder out = new StringBuilder();
                     for (String s:parsedResults) {
                         out.append(s);
                     }
                     tv.setText(out.toString());
+
+                    if (Objects.equals(uuid1, b1id)){
+                        if(currenttime.isBefore(lastb2time.plusNanos(500)) && b2available) {
+                            String data = String.format(
+                                    "%d %d %s %s",
+                                    lastb1,
+                                    lastb2,
+                                    currenttime.format(DateTimeFormatter.ISO_LOCAL_TIME),
+                                    lastb2time.format(DateTimeFormatter.ISO_LOCAL_TIME)
+                            );
+                            writeToFile(data, currentfilename, getApplicationContext());
+                            datacount++;
+                            b1available = false;
+                            b2available = false;
+                        }
+                        else{
+                            lastb1 = result.getRssi();
+                            lastb1time = currenttime;
+                            b1available = true;
+                        }
+                    }
+                    else if (Objects.equals(uuid1, b2id)){
+                        if(currenttime.isBefore(lastb1time.plusNanos(500)) && b1available) {
+                            String data = String.format(
+                                    "%d %d %s %s",
+                                    lastb1,
+                                    lastb2,
+                                    lastb1time.format(DateTimeFormatter.ISO_LOCAL_TIME),
+                                    currenttime.format(DateTimeFormatter.ISO_LOCAL_TIME)
+                            );
+                            writeToFile(data, currentfilename, getApplicationContext());
+                            datacount++;
+                            b1available = false;
+                            b2available = false;
+                        }
+                        else{
+                            lastb2 = result.getRssi();
+                            lastb2time = currenttime;
+                            b2available = true;
+                        }
+                    }
                 }
             }
 
@@ -147,6 +249,10 @@ public class MainActivity extends AppCompatActivity {
                     BluetoothLeScanner bts = bta.getBluetoothLeScanner();
                     if (button.getText() == getString(R.string.buttonstarttext)) {
                         sw.setEnabled(false);
+                        datacount = 0;
+                        currentfilename = String.format(
+                                "BTdata(%s).txt",
+                                LocalTime.now().format(DateTimeFormatter.ofPattern("HH-mm-ss")));
                         tv.setText("");
                         button.setText(R.string.buttonactivetext);
                         bts.startScan(callback);
@@ -167,16 +273,13 @@ public class MainActivity extends AppCompatActivity {
                         button.setText(R.string.buttonstarttext);
                         List<android.net.wifi.ScanResult> results = wfm.getScanResults();
                         StringBuilder update = new StringBuilder();
-                        Calendar calendar = Calendar.getInstance();
                         for (android.net.wifi.ScanResult result:results) {
                             String parsedResult = String.format(
                                     "Name: %-22s | Address: %s | RSSI: %-3d | %02d:%02d:%02d\n",
                                     result.SSID,
                                     result.BSSID,
                                     result.level,
-                                    calendar.get(Calendar.HOUR_OF_DAY),
-                                    calendar.get(Calendar.MINUTE),
-                                    calendar.get(Calendar.SECOND));
+                                    LocalTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME));
                             update.append(parsedResult);
                         }
                         tv.setText(update.toString());
@@ -185,6 +288,28 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-
+    private void writeToFile(String data,String filename,Context context) {
+        File path = context.getFilesDir();
+        File file = new File(path, filename);
+        FileOutputStream stream = null;
+        try {
+            stream = new FileOutputStream(file, true);
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+        try {
+            assert stream != null;
+            stream.write(data.getBytes());
+        }
+        catch (IOException e) {
+            Log.e("Exception", "File write failed: " + e.toString());
+        } finally {
+            try {
+                stream.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
 }
