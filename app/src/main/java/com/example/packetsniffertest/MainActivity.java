@@ -15,6 +15,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.Environment;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
@@ -29,6 +30,7 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.sql.Time;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -83,32 +85,33 @@ public class MainActivity extends AppCompatActivity {
 
         btids = new ArrayList<>();
         parsedResults = new ArrayList<>();
-        whitelist = new ArrayList<>(Arrays.asList("20001","20002","20003","20004"));
-        b1id = "20001";
-        b2id = "20002";
+        whitelist = new ArrayList<>(Arrays.asList("z05","BB-1A48","20003","20004"));
+        b1id = "z05";
+        b2id = "BB-1A48";
         lastb1 = lastb2 = 1;
         lastb1time = lastb2time = currenttime = LocalTime.now();
         b1available = b2available = false;
-        usewhitelist = false;
+        usewhitelist = true;
         datacount = 0;
         currentfilename = "";
 
         final Button button = findViewById(R.id.button);
         final TextView tv = findViewById(R.id.textView);
+        final TextView tv2 = findViewById(R.id.textView2);
         tv.setMovementMethod(new ScrollingMovementMethod());
 
         final ScanCallback callback = new ScanCallback() {
             @Override
             public void onScanResult(int callbackType, ScanResult result) {
                 currenttime = LocalTime.now();
-                String uuid1 = result.getDevice().getUuids()[0].toString().substring(0,5);
+                String beaconid = result.getDevice().getName();
                 super.onScanResult(callbackType, result);
-                Log.d("Scan", "Found a new bluetooth signal");
+
                 if (!btids.contains(result.getDevice().getAddress()) &&
-                        (whitelist.contains(uuid1) || !usewhitelist) ){
-                    //Log.d("Scan", "Found a new bluetooth signal");
+                        (whitelist.contains(beaconid) || !usewhitelist) ){
+                    Log.d("Scan", "Found a new bluetooth signal");
                     String parsedResult = String.format(
-                            "Name: %-22s | Address: %s | RSSI: %-3d | %02d\n",
+                            "Name: %-22s | Address: %s | RSSI: %-3d | %s\n",
                             result.getDevice().getName(),
                             result.getDevice().getAddress(),
                             result.getRssi(),
@@ -121,8 +124,9 @@ public class MainActivity extends AppCompatActivity {
                     tv.setText(out.toString());
                     btids.add(result.getDevice().getAddress());
 
-                    if (Objects.equals(uuid1, b1id)){
-                        if(currenttime.isBefore(lastb2time.plusNanos(500)) && b2available) {
+                    if (Objects.equals(beaconid, b1id)){
+                        Log.d("initial set", "saw b1id");
+                        if(currenttime.isBefore(lastb2time.plusSeconds(1)) && b2available) {
                             String data = String.format(
                                     "%d %d %s %s",
                                     lastb1,
@@ -132,17 +136,21 @@ public class MainActivity extends AppCompatActivity {
                             );
                             writeToFile(data, currentfilename, getApplicationContext());
                             datacount++;
+                            tv2.setText(String.valueOf(datacount));
                             b1available = false;
                             b2available = false;
+                            Log.d("update", "matching pair with last b2 (" + String.valueOf(lastb1) + ", " + String.valueOf(lastb2) + ")");
                         }
                         else{
                             lastb1 = result.getRssi();
                             lastb1time = currenttime;
                             b1available = true;
+                            Log.d("initial set", "no match; setting b1available to true; b1 = " + String.valueOf(lastb1) + "*; b2 = " + String.valueOf(lastb2));
                         }
                     }
-                    else if (Objects.equals(uuid1, b2id)){
-                        if(currenttime.isBefore(lastb1time.plusNanos(500)) && b1available) {
+                    else if (Objects.equals(beaconid, b2id)){
+                        Log.d("initial set", "saw b2id");
+                        if(currenttime.isBefore(lastb1time.plusSeconds(1)) && b1available) {
                             String data = String.format(
                                     "%d %d %s %s",
                                     lastb1,
@@ -152,22 +160,25 @@ public class MainActivity extends AppCompatActivity {
                             );
                             writeToFile(data, currentfilename, getApplicationContext());
                             datacount++;
+                            tv2.setText(String.valueOf(datacount));
                             b1available = false;
                             b2available = false;
+                            Log.d("initial set", "matching pair with last b1 (" + String.valueOf(lastb1) + ", " + String.valueOf(lastb2) + ")");
                         }
                         else{
                             lastb2 = result.getRssi();
                             lastb2time = currenttime;
                             b2available = true;
+                            Log.d("initial set", "no match; setting b2available to true; b1 = " + String.valueOf(lastb1) + "; b2 = " + String.valueOf(lastb2) + "*");
                         }
                     }
                 }
-                else {
-                    //Log.d("Scan", "Found a duplicate bluetooth signal");
+                else if (btids.contains(result.getDevice().getAddress())){
+                    Log.d("Scan", "Found a duplicate bluetooth signal");
                     //update last seen
                     int loc = btids.indexOf(result.getDevice().getAddress());
                     String parsedResult = String.format(
-                            "Name: %-22s | Address: %s | RSSI: %-3d | %02d\n",
+                            "Name: %-22s | Address: %s | RSSI: %-3d | %s\n",
                             result.getDevice().getName(),
                             result.getDevice().getAddress(),
                             result.getRssi(),
@@ -179,8 +190,9 @@ public class MainActivity extends AppCompatActivity {
                     }
                     tv.setText(out.toString());
 
-                    if (Objects.equals(uuid1, b1id)){
-                        if(currenttime.isBefore(lastb2time.plusNanos(500)) && b2available) {
+                    if (Objects.equals(beaconid, b1id)){
+                        Log.d("update", "saw b1id");
+                        if(currenttime.isBefore(lastb2time.plusSeconds(1)) && b2available) {
                             String data = String.format(
                                     "%d %d %s %s",
                                     lastb1,
@@ -190,17 +202,21 @@ public class MainActivity extends AppCompatActivity {
                             );
                             writeToFile(data, currentfilename, getApplicationContext());
                             datacount++;
+                            tv2.setText(String.valueOf(datacount));
                             b1available = false;
                             b2available = false;
+                            Log.d("update", "matching pair with last b2 (" + String.valueOf(lastb1) + ", " + String.valueOf(lastb2) + ")");
                         }
                         else{
                             lastb1 = result.getRssi();
                             lastb1time = currenttime;
                             b1available = true;
+                            Log.d("update", "no match; setting b1available to true; b1 = " + String.valueOf(lastb1) + "*; b2 = " + String.valueOf(lastb2));
                         }
                     }
-                    else if (Objects.equals(uuid1, b2id)){
-                        if(currenttime.isBefore(lastb1time.plusNanos(500)) && b1available) {
+                    else if (Objects.equals(beaconid, b2id)){
+                        Log.d("update", "saw b2id");
+                        if(currenttime.isBefore(lastb1time.plusSeconds(1)) && b1available) {
                             String data = String.format(
                                     "%d %d %s %s",
                                     lastb1,
@@ -210,13 +226,16 @@ public class MainActivity extends AppCompatActivity {
                             );
                             writeToFile(data, currentfilename, getApplicationContext());
                             datacount++;
+                            tv2.setText(String.valueOf(datacount));
                             b1available = false;
                             b2available = false;
+                            Log.d("update", "matching pair with last b1 (" + String.valueOf(lastb1) + ", " + String.valueOf(lastb2) + ")");
                         }
                         else{
                             lastb2 = result.getRssi();
                             lastb2time = currenttime;
                             b2available = true;
+                            Log.d("update", "no match; setting b2available to true; b1 = " + String.valueOf(lastb1) + "; b2 = " + String.valueOf(lastb2) + "*");
                         }
                     }
                 }
@@ -257,6 +276,7 @@ public class MainActivity extends AppCompatActivity {
                                 "BTdata(%s).txt",
                                 LocalTime.now().format(DateTimeFormatter.ofPattern("HH-mm-ss")));
                         tv.setText("");
+                        tv2.setText("0");
                         button.setText(R.string.buttonactivetext);
                         bts.startScan(callback);
                     } else {
@@ -278,7 +298,7 @@ public class MainActivity extends AppCompatActivity {
                         StringBuilder update = new StringBuilder();
                         for (android.net.wifi.ScanResult result:results) {
                             String parsedResult = String.format(
-                                    "Name: %-22s | Address: %s | RSSI: %-3d | %02d:%02d:%02d\n",
+                                    "Name: %-22s | Address: %s | RSSI: %-3d | %s\n",
                                     result.SSID,
                                     result.BSSID,
                                     result.level,
@@ -292,27 +312,23 @@ public class MainActivity extends AppCompatActivity {
         });
     }
     private void writeToFile(String data,String filename,Context context) {
-        File path = context.getFilesDir();
+        //File path = context.getFilesDir();
+        //File file = new File(path, filename);
+        File path = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS);
         File file = new File(path, filename);
-        FileOutputStream stream = null;
         try {
-            stream = new FileOutputStream(file, true);
-        } catch (FileNotFoundException e) {
+            FileOutputStream stream = new FileOutputStream(file, true);
+            //Log.d("Writing", "file location: " + file.getAbsolutePath());
+            //stream.write(data.getBytes());
+            OutputStreamWriter writer = new OutputStreamWriter(stream);
+            writer.append(data + '\n');
+            writer.close();
+            stream.close();
+        } catch (IOException e) {
             e.printStackTrace();
         }
-        try {
-            assert stream != null;
-            stream.write(data.getBytes());
-        }
-        catch (IOException e) {
-            Log.e("Exception", "File write failed: " + e.toString());
-        } finally {
-            try {
-                stream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+
     }
 
 }
