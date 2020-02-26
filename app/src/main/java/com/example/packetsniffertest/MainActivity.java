@@ -60,6 +60,7 @@ public class MainActivity extends AppCompatActivity {
     int datacount;
     boolean b1available;
     boolean b2available;
+    boolean usewhitelist;
     String currentfilename;
 
     @Override
@@ -88,6 +89,7 @@ public class MainActivity extends AppCompatActivity {
         lastb1 = lastb2 = 1;
         lastb1time = lastb2time = currenttime = LocalTime.now();
         b1available = b2available = false;
+        usewhitelist = false;
         datacount = 0;
         currentfilename = "";
 
@@ -101,8 +103,9 @@ public class MainActivity extends AppCompatActivity {
                 currenttime = LocalTime.now();
                 String uuid1 = result.getDevice().getUuids()[0].toString().substring(0,5);
                 super.onScanResult(callbackType, result);
+                Log.d("Scan", "Found a new bluetooth signal");
                 if (!btids.contains(result.getDevice().getAddress()) &&
-                        whitelist.contains(uuid1) ){
+                        (whitelist.contains(uuid1) || !usewhitelist) ){
                     //Log.d("Scan", "Found a new bluetooth signal");
                     String parsedResult = String.format(
                             "Name: %-22s | Address: %s | RSSI: %-3d | %02d\n",
