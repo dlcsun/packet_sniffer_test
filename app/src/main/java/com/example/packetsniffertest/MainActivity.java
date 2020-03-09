@@ -4,6 +4,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.le.BluetoothLeScanner;
@@ -16,10 +17,13 @@ import android.content.IntentFilter;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Trace;
 import android.text.method.ScrollingMovementMethod;
 import android.util.Log;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.ViewSwitcher;
@@ -31,6 +35,7 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.security.cert.TrustAnchor;
 import java.sql.Time;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -62,7 +67,6 @@ public class MainActivity extends AppCompatActivity {
     int datacount;
     boolean b1available;
     boolean b2available;
-    boolean usewhitelist;
     String currentfilename;
 
     @Override
@@ -85,20 +89,25 @@ public class MainActivity extends AppCompatActivity {
 
         btids = new ArrayList<>();
         parsedResults = new ArrayList<>();
-        whitelist = new ArrayList<>(Arrays.asList("z05","BB-1A48","20003","20004"));
-        b1id = "z05";
-        b2id = "BB-1A48";
+        whitelist = new ArrayList<>(Arrays.asList("1","2"));
+        b1id = "1";
+        b2id = "2";
         lastb1 = lastb2 = 1;
         lastb1time = lastb2time = currenttime = LocalTime.now();
         b1available = b2available = false;
-        usewhitelist = true;
         datacount = 0;
         currentfilename = "";
 
         final Button button = findViewById(R.id.button);
+        final Button idbutton = findViewById(R.id.idsetbutton);
+        final Button clsbutton = findViewById(R.id.button3);
         final TextView tv = findViewById(R.id.textView);
         final TextView tv2 = findViewById(R.id.textView2);
+        final TextView id1v = findViewById(R.id.id1txt);
+        final TextView id2v = findViewById(R.id.id2txt);
         tv.setMovementMethod(new ScrollingMovementMethod());
+        final Switch sourceswitch = findViewById(R.id.switch1);
+        final Switch whitelistswitch = findViewById(R.id.whitelistswitch);
 
         final ScanCallback callback = new ScanCallback() {
             @Override
@@ -108,7 +117,7 @@ public class MainActivity extends AppCompatActivity {
                 super.onScanResult(callbackType, result);
 
                 if (!btids.contains(result.getDevice().getAddress()) &&
-                        (whitelist.contains(beaconid) || !usewhitelist) ){
+                        ((whitelist.contains(beaconid) && whitelistswitch.isChecked()) || !whitelistswitch.isChecked()) ){
                     Log.d("Scan", "Found a new bluetooth signal");
                     String parsedResult = String.format(
                             "Name: %-22s | Address: %s | RSSI: %-3d | %s\n",
@@ -263,51 +272,86 @@ public class MainActivity extends AppCompatActivity {
             }
         };
 
-        button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Switch sw = findViewById(R.id.switch1);
-                if(sw.isChecked()) {
-                    BluetoothLeScanner bts = bta.getBluetoothLeScanner();
-                    if (button.getText() == getString(R.string.buttonstarttext)) {
-                        sw.setEnabled(false);
-                        datacount = 0;
-                        currentfilename = String.format(
-                                "BTdata(%s).txt",
-                                LocalTime.now().format(DateTimeFormatter.ofPattern("HH-mm-ss")));
-                        tv.setText("");
-                        tv2.setText("0");
-                        button.setText(R.string.buttonactivetext);
-                        bts.startScan(callback);
-                    } else {
-                        sw.setEnabled(true);
-                        button.setText(R.string.buttonstarttext);
-                        bts.stopScan(callback);
-                    }
+        button.setOnClickListener(v -> {
+            if(sourceswitch.isChecked()) {
+                BluetoothLeScanner bts = bta.getBluetoothLeScanner();
+                if (button.getText() == getString(R.string.buttonstarttext)) {
+                    sourceswitch.setEnabled(false);
+                    datacount = 0;
+                    currentfilename = String.format(
+                            "BTdata(%s).txt",
+                            LocalTime.now().format(DateTimeFormatter.ofPattern("HH-mm-ss")));
+                    tv.setText("");
+                    tv2.setText("0");
+                    button.setText(R.string.buttonactivetext);
+                    bts.startScan(callback);
+                } else {
+                    sourceswitch.setEnabled(true);
+                    button.setText(R.string.buttonstarttext);
+                    bts.stopScan(callback);
                 }
-                else {
-                    if (button.getText() == getString(R.string.buttonstarttext)) {
-                        sw.setEnabled(false);
-                        tv.setText("");
-                        button.setText(R.string.buttonactivetext);
-                        wfm.startScan();
-                    } else {
-                        sw.setEnabled(true);
-                        button.setText(R.string.buttonstarttext);
-                        List<android.net.wifi.ScanResult> results = wfm.getScanResults();
-                        StringBuilder update = new StringBuilder();
-                        for (android.net.wifi.ScanResult result:results) {
-                            String parsedResult = String.format(
-                                    "Name: %-22s | Address: %s | RSSI: %-3d | %s\n",
-                                    result.SSID,
-                                    result.BSSID,
-                                    result.level,
-                                    LocalTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME));
-                            update.append(parsedResult);
-                        }
-                        tv.setText(update.toString());
+            }
+            else {
+                if (button.getText() == getString(R.string.buttonstarttext)) {
+                    sourceswitch.setEnabled(false);
+                    tv.setText("");
+                    button.setText(R.string.buttonactivetext);
+                    wfm.startScan();
+                } else {
+                    sourceswitch.setEnabled(true);
+                    button.setText(R.string.buttonstarttext);
+                    List<android.net.wifi.ScanResult> results = wfm.getScanResults();
+                    StringBuilder update = new StringBuilder();
+                    for (android.net.wifi.ScanResult result:results) {
+                        String parsedResult = String.format(
+                                "Name: %-22s | Address: %s | RSSI: %-3d | %s\n",
+                                result.SSID,
+                                result.BSSID,
+                                result.level,
+                                LocalTime.now().format(DateTimeFormatter.ISO_LOCAL_TIME));
+                        update.append(parsedResult);
                     }
+                    tv.setText(update.toString());
                 }
+            }
+        });
+
+        sourceswitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (isChecked){
+                id1v.setEnabled(true);
+                id2v.setEnabled(true);
+                idbutton.setEnabled(true);
+                whitelistswitch.setEnabled(true); 
+            }
+            else{
+                id1v.setEnabled(false);
+                id2v.setEnabled(false);
+                idbutton.setEnabled(false);
+                whitelistswitch.setEnabled(false);
+            }
+        });
+
+        idbutton.setOnClickListener(v -> {
+            b1id = id1v.getText().toString();
+            b2id = id2v.getText().toString();
+            whitelist = new ArrayList<>(Arrays.asList(b1id, b2id));
+        });
+
+        clsbutton.setOnClickListener(v -> {
+            tv.setText("Hello World!");
+            parsedResults = new ArrayList<>();
+            btids = new ArrayList<>();
+        });
+
+        id1v.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) {
+                hideKeyboard(v);
+            }
+        });
+
+        id2v.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) {
+                hideKeyboard(v);
             }
         });
     }
@@ -322,7 +366,7 @@ public class MainActivity extends AppCompatActivity {
             //Log.d("Writing", "file location: " + file.getAbsolutePath());
             //stream.write(data.getBytes());
             OutputStreamWriter writer = new OutputStreamWriter(stream);
-            writer.append(data + '\n');
+            writer.append(data).append(String.valueOf('\n'));
             writer.close();
             stream.close();
         } catch (IOException e) {
@@ -331,4 +375,8 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    public void hideKeyboard(View view) {
+        InputMethodManager inputMethodManager =(InputMethodManager)getSystemService(Activity.INPUT_METHOD_SERVICE);
+        inputMethodManager.hideSoftInputFromWindow(view.getWindowToken(), 0);
+    }
 }
